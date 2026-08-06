@@ -58,3 +58,17 @@
 
 - Do not assume. Inspect logs, query the database, call server APIs, or use the CLI to observe real state.
 - See [docs/debugging-and-qa.md](docs/debugging-and-qa.md) for dev ports/data dirs, entity-ID lookups, and the `scripts/bb-dev-app` local dev QA launcher.
+
+## Agent skills
+
+### Issue tracker
+
+Hybrid: GitHub Issues (`gh` CLI) for shared/collaborative work and local markdown (`.scratch/`) for solo/scratch work. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical labels used as-is: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at repo root + `docs/adr/`. See `docs/agents/domain.md`.
