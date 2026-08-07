@@ -702,6 +702,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "ACP permission CLI config only needs args for modes that differ from the agent default.",
   "hostDaemonCommandSchema.acpLaunchSpec.permissionCli.insertAfterArgs":
     "ACP permission CLI config omits insertAfterArgs when permission args should be inserted before all configured agent args.",
+  "hostDaemonCommandSchema.acpLaunchSpec.uniqueDaemonSocket":
+    "ACP agents that always route through a daemon socket (e.g. prime-agent --mode acp) opt in to a unique --daemon-socket per spawned process; others omit the flag.",
   "hostDaemonCommandSchema.checkout":
     "environment.provision only includes checkout instructions for unmanaged workspaces that requested a branch mutation.",
   "hostDaemonCommandSchema.targetPath":
@@ -742,6 +744,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "ACP permission CLI config only needs args for modes that differ from the agent default.",
   "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec.permissionCli.insertAfterArgs":
     "ACP permission CLI config omits insertAfterArgs when permission args should be inserted before all configured agent args.",
+  "hostDaemonOnlineRpcCommandSchema.acpLaunchSpec.uniqueDaemonSocket":
+    "ACP agents that always route through a daemon socket (e.g. prime-agent --mode acp) opt in to a unique --daemon-socket per spawned process; others omit the flag.",
   "hostDaemonOnlineRpcCommandSchema.query":
     "host.list_files may omit a search string to list files without filtering.",
   "hostDaemonOnlineRpcCommandSchema.path":
@@ -800,6 +804,8 @@ const INTENTIONAL_OPTIONAL_HOST_DAEMON_FIELDS: Record<string, string> = {
     "resume-context ACP permission CLI config only needs args for modes that differ from the agent default.",
   "hostDaemonCommandSchema.resumeContext.acpLaunchSpec.permissionCli.insertAfterArgs":
     "resume-context ACP permission CLI config omits insertAfterArgs when permission args should be inserted before all configured agent args.",
+  "hostDaemonCommandSchema.resumeContext.acpLaunchSpec.uniqueDaemonSocket":
+    "ACP agents that always route through a daemon socket (e.g. prime-agent --mode acp) opt in to a unique --daemon-socket per spawned process; others omit the flag.",
 };
 
 describe("host-daemon local schemas", () => {
@@ -1038,6 +1044,10 @@ describe("host-daemon local schemas", () => {
 describe("host-daemon command schemas", () => {
   // Version 76 lets the daemon report a repository that appears after the
   // server created the environment. Older daemons do not send that message.
+  //
+  // Version 76 also carries the ACP `uniqueDaemonSocket` launch-spec flag that
+  // gives Prime Agent (and any daemon-routed ACP agent) an isolated
+  // `--daemon-socket` per spawned process.
   it("uses protocol version 76 for live workspace metadata refresh", () => {
     expect(HOST_DAEMON_PROTOCOL_VERSION).toBe(76);
   });

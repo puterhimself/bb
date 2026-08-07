@@ -197,6 +197,14 @@ export const acpInitializeResultSchema = z
           })
           .passthrough()
           .optional(),
+        sessionCapabilities: z
+          .object({
+            // ACP capability descriptors are empty objects (`close: {}`);
+            // presence means the capability is offered.
+            close: z.object({}).passthrough().optional(),
+          })
+          .passthrough()
+          .optional(),
       })
       .passthrough()
       .optional(),
@@ -331,6 +339,8 @@ export const acpSessionNewResultSchema = z
   })
   .passthrough();
 export type AcpSessionNewResult = z.infer<typeof acpSessionNewResultSchema>;
+
+export const acpSessionCloseResultSchema = z.object({}).passthrough();
 
 export const acpConfigStateResultSchema = z
   .object({

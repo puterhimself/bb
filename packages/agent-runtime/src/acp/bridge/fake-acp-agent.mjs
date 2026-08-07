@@ -31,6 +31,8 @@ import { createInterface } from "node:readline";
 import { appendFileSync, writeFileSync } from "node:fs";
 
 const loadSession = process.env.FAKE_ACP_LOAD_SESSION === "1";
+const sessionClose = process.env.FAKE_ACP_SESSION_CLOSE === "1";
+const sessionCloseFile = process.env.FAKE_ACP_SESSION_CLOSE_FILE;
 const modelConfig = process.env.FAKE_ACP_MODEL_CONFIG === "1";
 const modelsField = process.env.FAKE_ACP_MODELS_FIELD === "1";
 const thoughtLevelConfig = process.env.FAKE_ACP_THOUGHT_LEVEL_CONFIG === "1";
@@ -73,6 +75,10 @@ process.on("SIGTERM", () => {
   }
   process.exit(0);
 });
+
+if (sessionCloseFile) {
+  writeFileSync(sessionCloseFile, "not-closed\n");
+}
 
 if (process.env.FAKE_ACP_READY_FILE) {
   writeFileSync(process.env.FAKE_ACP_READY_FILE, "ready\n");
@@ -309,6 +315,7 @@ async function handleMessage(message) {
           agentCapabilities: {
             loadSession,
             promptCapabilities: { image: false },
+            ...(sessionClose ? { sessionCapabilities: { close: {} } } : {}),
           },
           ...(authMethods.length > 0
             ? { authMethods: authMethods.map((id) => ({ id })) }
@@ -459,6 +466,14 @@ async function handleMessage(message) {
         const id = activePromptId;
         activePromptId = null;
         send({ jsonrpc: "2.0", id, result: { stopReason: "cancelled" } });
+      }
+      return;
+    case "session/close":
+      if (sessionCloseFile) {
+        writeFileSync(sessionCloseFile, "session/close\n");
+      }
+      if (message.id !== undefined) {
+        send({ jsonrpc: "2.0", id: message.id, result: {} });
       }
       return;
     default:

@@ -428,6 +428,78 @@ describe("resolveSystemExecutionOptions", () => {
     });
   });
 
+  it("includes installed Prime Agent ACP and sends its isolated-daemon launch spec when loading models", async () => {
+    await withTestHarness({}, async (harness) => {
+      const { host, session } = seedHostSession(harness.deps, {
+        id: "host-execution-options-known-prime-installed",
+      });
+      const catalogModel = availableModelFixture({
+        model: "acp-default",
+      });
+      const responder = registerHostRpcResponder(harness, {
+        hostId: host.id,
+        sessionId: session.id,
+        handle: (request) => {
+          if (request.command.type === "known_acp_agents.status") {
+            return {
+              ok: true,
+              result: {
+                agents: request.command.agents.map((agent) => ({
+                  ...agent,
+                  installed: agent.id === "acp-prime-agent",
+                  executablePath:
+                    agent.id === "acp-prime-agent"
+                      ? "/Users/example/.local/bin/prime-agent"
+                      : null,
+                })),
+              },
+            };
+          }
+          if (request.command.type === "provider.list_models") {
+            return {
+              ok: true,
+              result: {
+                models: [catalogModel],
+                selectedOnlyModels: [],
+              },
+            };
+          }
+          throw new Error(`Unexpected RPC command ${request.command.type}`);
+        },
+      });
+
+      const response = await resolveSystemExecutionOptions(harness.deps, {
+        hostId: host.id,
+        providerId: "acp-prime-agent",
+      });
+
+      expect(response.providers).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "acp-prime-agent",
+            displayName: "Prime Agent",
+            available: true,
+          }),
+        ]),
+      );
+      expect(response.models).toEqual([catalogModel]);
+      expect(responder.requests.map((request) => request.command.type)).toEqual(
+        ["known_acp_agents.status", "provider.list_models"],
+      );
+      expect(responder.requests[1].command).toEqual({
+        type: "provider.list_models",
+        providerId: "acp-prime-agent",
+        acpLaunchSpec: {
+          displayName: "Prime Agent",
+          command: "prime-agent",
+          args: ["--mode", "acp"],
+          env: {},
+          uniqueDaemonSocket: true,
+        },
+      });
+    });
+  });
+
   it("omits known ACP agents that the host reports missing", async () => {
     await withTestHarness({}, async (harness) => {
       const { host, session } = seedHostSession(harness.deps, {

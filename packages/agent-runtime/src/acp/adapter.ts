@@ -9,6 +9,9 @@
  */
 
 import path from "node:path";
+import { mkdirSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import os from "node:os";
 import {
   buildAcpProviderInfo,
   getBuiltInAgentProviderInfo,
@@ -177,7 +180,12 @@ function mapAcpToolCallStatus(
 }
 
 const acpRawInputCommandSchema = z
-  .object({ command: z.string() })
+  .object({
+    command: z.string().optional(),
+    // ACP agents with cell-based tools (e.g. Prime Agent's IPython) report the
+    // cell source as `code` instead of `command`.
+    code: z.string().optional(),
+  })
   .passthrough();
 const acpRawInputPathSchema = z
   .object({
@@ -192,8 +200,12 @@ function extractAcpCommand(event: {
   title?: string;
 }): string | undefined {
   const parsed = acpRawInputCommandSchema.safeParse(event.rawInput);
-  if (parsed.success && parsed.data.command.trim().length > 0) {
-    return parsed.data.command;
+  if (parsed.success) {
+    for (const value of [parsed.data.command, parsed.data.code]) {
+      if (value !== undefined && value.trim().length > 0) {
+        return value;
+      }
+    }
   }
   return toOptionalString(event.title);
 }
@@ -535,6 +547,33 @@ function buildAcpSessionInstructions(
 // Adapter factory
 // ---------------------------------------------------------------------------
 
+function buildAgentCommandArgs(
+  profile: AcpAgentProfile,
+  scope: string,
+): string[] {
+  const args = [...profile.agentCommand.args];
+  if (profile.uniqueDaemonSocket) {
+    args.push("--daemon-socket", createUniqueAcpDaemonSocketPath(scope));
+  }
+  return args;
+}
+
+/**
+ * Unique, writable daemon socket path for an agent CLI that routes sessions
+ * through a daemon (Prime Agent ACP mode). One path per spawned agent process
+ * keeps each BB thread's daemon isolated: the process's cwd is fixed at
+ * spawn, sessions never share a socket, and a stale user daemon on the
+ * agent's default socket is never joined.
+ */
+function createUniqueAcpDaemonSocketPath(scope: string): string {
+  const directory = path.join(os.tmpdir(), "bb-prime-agent");
+  mkdirSync(directory, { recursive: true });
+  return path.join(
+    directory,
+    `${scope}-${randomBytes(4).toString("hex")}.sock`,
+  );
+}
+
 export function createAcpProviderAdapter(
   opts: CreateAcpProviderAdapterOptions,
 ): ProviderAdapter {
@@ -580,7 +619,7 @@ export function createAcpProviderAdapter(
     }
     return {
       command: profile.agentCommand.command,
-      args: [...profile.agentCommand.args],
+      args: buildAgentCommandArgs(profile, "bb-prime-discovery"),
       ...(profile.cwd !== undefined ? { cwd: profile.cwd } : {}),
       ...(profile.env !== undefined ? { envVars: profile.env } : {}),
     };
@@ -1247,7 +1286,7 @@ export function createAcpProviderAdapter(
       cwd,
       agent: {
         command: profile.agentCommand.command,
-        args: [...profile.agentCommand.args],
+        args: buildAgentCommandArgs(profile, `bb-${command.threadId}`),
       },
       ...buildModelSelectionParam(command.options),
       ...buildReasoningCliParam(),

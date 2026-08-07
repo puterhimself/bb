@@ -1527,6 +1527,26 @@ describe("acp bridge", () => {
     startedProviderThreadIds.pop();
   });
 
+  it("sends session/close on thread/stop when the agent advertises it", async () => {
+    const sessionCloseFile = join(
+      workspaceDir,
+      `session-close-${nextThreadSerial}.txt`,
+    );
+    const { providerThreadId } = await startThread({
+      envVars: {
+        FAKE_ACP_SESSION_CLOSE: "1",
+        FAKE_ACP_SESSION_CLOSE_FILE: sessionCloseFile,
+      },
+    });
+    expect(readFileSync(sessionCloseFile, "utf8")).toBe("not-closed\n");
+
+    await stopThread(providerThreadId);
+    startedProviderThreadIds.pop();
+
+    await waitForFileWithRealTimer(sessionCloseFile);
+    expect(readFileSync(sessionCloseFile, "utf8")).toContain("session/close");
+  });
+
   it("resumes via session/load when the agent supports it", async () => {
     const first = await startThread({
       envVars: { FAKE_ACP_LOAD_SESSION: "1" },

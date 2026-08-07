@@ -35,6 +35,13 @@ export interface AcpAgentProfile {
   reasoningCli?: AcpAgentReasoningCli;
   nativeReasoning?: AcpAgentNativeReasoning;
   permissionCli?: AcpAgentPermissionCli;
+  /**
+   * The agent CLI always routes sessions through a daemon socket (e.g.
+   * `prime-agent --mode acp`). The adapter appends `--daemon-socket <unique>`
+   * to every spawned agent process so each BB thread gets its own isolated
+   * daemon.
+   */
+  uniqueDaemonSocket?: boolean;
 }
 
 interface BuiltInAcpAgentProfile extends AcpAgentProfile {

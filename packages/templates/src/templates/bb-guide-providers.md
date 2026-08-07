@@ -45,9 +45,9 @@ page. This preference also defaults off and applies to newly started, resumed,
 or forked provider sessions.
 
 Known ACP agents can appear automatically when their CLI is installed on the
-host. For example, opencode, omp, Grok Build's grok CLI, or Hermes' hermes CLI
-on PATH appears as provider acp-opencode, acp-omp, acp-grok, or
-acp-hermes-agent.
+host. For example, opencode, omp, Grok Build's grok CLI, Hermes' hermes CLI,
+or Prime Agent's prime-agent CLI on PATH appears as provider acp-opencode,
+acp-omp, acp-grok, acp-hermes-agent, or acp-prime-agent.
 
 Custom ACP agents are configured in the app data-dir config.json under
 customAcpAgents. bb derives provider id acp-<id> from each slug id. Edit the JSON

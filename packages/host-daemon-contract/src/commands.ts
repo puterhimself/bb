@@ -167,6 +167,15 @@ export const hostDaemonAcpLaunchSpecSchema = z
     reasoningCli: acpReasoningCliSchema.optional(),
     nativeReasoning: acpNativeReasoningSchema.optional(),
     permissionCli: acpPermissionCliSchema.optional(),
+    /**
+     * The agent CLI always routes sessions through a daemon socket (e.g.
+     * `prime-agent --mode acp`). When set, the adapter appends
+     * `--daemon-socket <unique-path>` to every spawned agent process so each
+     * BB thread gets its own isolated daemon: cwd is fixed per process,
+     * sessions never collide on a shared socket, and a stale user daemon on
+     * the agent's default socket can't be joined.
+     */
+    uniqueDaemonSocket: z.boolean().optional(),
   })
   .strict();
 export type HostDaemonAcpLaunchSpec = z.infer<
@@ -186,6 +195,7 @@ export function normalizeHostDaemonAcpLaunchSpec(
     reasoningCli,
     nativeReasoning,
     permissionCli,
+    uniqueDaemonSocket,
   } = spec;
   const permissionCliHasMode =
     permissionCli?.full !== undefined ||
@@ -205,6 +215,7 @@ export function normalizeHostDaemonAcpLaunchSpec(
     ...(permissionCli !== undefined && permissionCliHasMode
       ? { permissionCli }
       : {}),
+    ...(uniqueDaemonSocket === true ? { uniqueDaemonSocket: true } : {}),
   };
 }
 

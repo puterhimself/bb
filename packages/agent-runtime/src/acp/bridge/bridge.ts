@@ -66,6 +66,7 @@ import {
   acpPromptResultSchema,
   acpReadTextFileParamsSchema,
   acpRequestPermissionParamsSchema,
+  acpSessionCloseResultSchema,
   acpSessionNewResultSchema,
   acpSessionNotificationParamsSchema,
   type AcpConfigStateResult,
@@ -120,6 +121,8 @@ interface AcpThreadSession {
   connection: AcpAgentConnection;
   agentLabel: string;
   supportsImageInput: boolean;
+  /** Whether the agent advertises `sessionCapabilities.close` over ACP. */
+  supportsSessionClose: boolean;
   policy: AcpSessionPolicy;
   cwd: string;
   pendingInstructions: string | undefined;
@@ -144,6 +147,7 @@ let dynamicToolBridgePromise: Promise<AcpDynamicToolBridge> | null = null;
 // Runtime waits on thread/stop until the agent settles the cancelled prompt or
 // this timeout forces disposal. Stop remains a best-effort success boundary.
 const THREAD_STOP_CANCEL_TIMEOUT_MS = 4_000;
+const ACP_SESSION_CLOSE_TIMEOUT_MS = 2_000;
 
 // ---------------------------------------------------------------------------
 // stdout helpers (bridge → runtime)
@@ -739,6 +743,8 @@ async function loadSessionDiscoveredModels(
   });
 
   let timeout: ReturnType<typeof setTimeout> | undefined;
+  let supportsSessionClose = false;
+  let discoverySessionId: string | undefined;
   const timeoutReached = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
       connection.kill();
@@ -765,6 +771,9 @@ async function loadSessionDiscoveredModels(
           },
           resultSchema: acpInitializeResultSchema,
         });
+        supportsSessionClose =
+          initializeResult.agentCapabilities?.sessionCapabilities?.close !==
+          undefined;
         await authenticateAcpAgent({
           connection,
           env: childEnv,
@@ -782,6 +791,7 @@ async function loadSessionDiscoveredModels(
       clearTimeout(timeout);
       timeout = undefined;
     }
+    discoverySessionId = newSession.sessionId;
 
     const modelOption = findAcpModelConfigOption(newSession.configOptions);
     const configOptionModels = buildModelCatalogFromConfigOptions(modelOption);
@@ -824,6 +834,18 @@ async function loadSessionDiscoveredModels(
   } finally {
     if (timeout !== undefined) {
       clearTimeout(timeout);
+    }
+    if (supportsSessionClose && discoverySessionId !== undefined) {
+      await Promise.race([
+        connection.request({
+          method: "session/close",
+          params: { sessionId: discoverySessionId },
+          resultSchema: acpSessionCloseResultSchema,
+        }),
+        new Promise<void>((resolveTimeout) =>
+          setTimeout(resolveTimeout, ACP_SESSION_CLOSE_TIMEOUT_MS),
+        ),
+      ]);
     }
     connection.kill();
   }
@@ -1244,7 +1266,12 @@ function cancelPendingPermissions(session: AcpThreadSession): void {
 }
 
 const acpRawInputCommandSchema = z
-  .object({ command: z.string() })
+  .object({
+    command: z.string().optional(),
+    // ACP agents with cell-based tools (e.g. Prime Agent's IPython) report the
+    // cell source as `code` instead of `command`.
+    code: z.string().optional(),
+  })
   .passthrough();
 
 function handlePermissionRequest(
@@ -1279,6 +1306,9 @@ function handlePermissionRequest(
   const rawInputCommand = acpRawInputCommandSchema.safeParse(
     toolCall?.rawInput,
   );
+  const rawInputCommandText = rawInputCommand.success
+    ? (rawInputCommand.data.command ?? rawInputCommand.data.code)
+    : undefined;
   void sendRuntimeRequest(ACP_PERMISSION_REQUEST_METHOD, {
     threadId: session.bbThreadId,
     providerThreadId: session.providerThreadId,
@@ -1289,8 +1319,9 @@ function handlePermissionRequest(
             toolCallId: toolCall.toolCallId,
             ...(toolCall.title ? { title: toolCall.title } : {}),
             ...(toolCall.kind ? { kind: toolCall.kind } : {}),
-            ...(rawInputCommand.success
-              ? { command: rawInputCommand.data.command }
+            ...(rawInputCommandText !== undefined &&
+            rawInputCommandText.trim().length > 0
+              ? { command: rawInputCommandText }
               : {}),
           },
         }
@@ -1499,6 +1530,7 @@ async function startAgentSession(
     connection,
     agentLabel,
     supportsImageInput: false,
+    supportsSessionClose: false,
     policy: {
       permissionMode: params.permissionMode,
       permissionEscalation: params.permissionEscalation,
@@ -1534,6 +1566,9 @@ async function startAgentSession(
     });
     session.supportsImageInput =
       initializeResult.agentCapabilities?.promptCapabilities?.image ?? false;
+    session.supportsSessionClose =
+      initializeResult.agentCapabilities?.sessionCapabilities?.close !==
+      undefined;
     const supportsLoadSession =
       initializeResult.agentCapabilities?.loadSession ?? false;
     const mcpServers = await buildSessionMcpServers(params);
@@ -1631,6 +1666,29 @@ async function stopSession(session: AcpThreadSession): Promise<void> {
         ),
       ]);
     }
+  }
+
+  if (
+    session.supportsSessionClose &&
+    session.providerThreadId !== "" &&
+    !session.connection.exited
+  ) {
+    // ACP's session/close releases the session slot on daemon-routed agents
+    // (e.g. prime-agent --mode acp). Without it, the agent's daemon keeps the
+    // session worker alive after the client disconnects, orphaning processes.
+    // Sent as a request and awaited so the agent relays the close to its
+    // daemon before we SIGTERM the client (a fire-and-forget notification
+    // races the kill and the daemon is left holding the session).
+    await Promise.race([
+      session.connection.request({
+        method: "session/close",
+        params: { sessionId: session.providerThreadId },
+        resultSchema: acpSessionCloseResultSchema,
+      }),
+      new Promise<void>((resolveTimeout) =>
+        setTimeout(resolveTimeout, ACP_SESSION_CLOSE_TIMEOUT_MS),
+      ),
+    ]);
   }
 
   session.connection.kill();

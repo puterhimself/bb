@@ -466,6 +466,63 @@ describe("acp adapter model cli", () => {
     });
   });
 
+  it("appends a unique --daemon-socket to agent spawn args when the profile requests it", () => {
+    const adapter = createAcpProviderAdapter({
+      profile: {
+        providerId: "acp-prime-agent",
+        displayName: "Prime Agent",
+        agentCommand: { command: "prime-agent", args: ["--mode", "acp"] },
+        uniqueDaemonSocket: true,
+      },
+      additionalWorkspaceWriteRoots: [],
+    });
+
+    const start = adapter.buildCommandPlan({
+      type: "thread/start",
+      threadId: "thread-1",
+      cwd: "/workspace",
+      options: {
+        ...fullProviderExecutionContext,
+        permissionMode: "full",
+      },
+      instructionMode: "append",
+    });
+    if (start.kind !== "request") {
+      throw new Error("Expected request command plan");
+    }
+    const startArgs = (start.params as { agent: { args: string[] } }).agent.args;
+    expect(startArgs.slice(0, 2)).toEqual(["--mode", "acp"]);
+    expect(startArgs[2]).toBe("--daemon-socket");
+    expect(startArgs[3]).toMatch(/\/bb-prime-agent\/bb-thread-1-[0-9a-f]{8}\.sock$/u);
+
+    const list = adapter.buildCommandPlan({ type: "model/list" });
+    if (list.kind !== "request") {
+      throw new Error("Expected request command plan");
+    }
+    const listArgs = (list.params as { agent: { args: string[] } }).agent.args;
+    expect(listArgs.slice(0, 2)).toEqual(["--mode", "acp"]);
+    expect(listArgs[2]).toBe("--daemon-socket");
+    expect(listArgs[3]).toMatch(/\/bb-prime-agent\/bb-prime-discovery-[0-9a-f]{8}\.sock$/u);
+  });
+
+  it("leaves spawn args untouched without uniqueDaemonSocket", () => {
+    const plan = createAdapter().buildCommandPlan({
+      type: "thread/start",
+      threadId: "thread-1",
+      cwd: "/workspace",
+      options: {
+        ...fullProviderExecutionContext,
+        permissionMode: "full",
+      },
+      instructionMode: "append",
+    });
+    expect(plan).toMatchObject({
+      params: {
+        agent: { command: "agent", args: ["acp"] },
+      },
+    });
+  });
+
   it("omits the reasoning level when the session has none", () => {
     const plan = createAdapter().buildCommandPlan({
       type: "thread/start",

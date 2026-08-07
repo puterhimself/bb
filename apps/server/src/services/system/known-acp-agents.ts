@@ -14,6 +14,20 @@ export interface KnownAcpAgentExecutableQuery {
 
 export const KNOWN_ACP_AGENTS: readonly KnownAcpAgent[] = [
   {
+    // Prime Agent speaks ACP over stdio via `prime-agent --mode acp`
+    // (https://github.com/PrimeIntellect-ai/prime-agent/blob/main/packages/coding-agent/docs/acp.md).
+    // Its CLI always routes sessions through a daemon socket, so each BB
+    // thread spawns its own `--daemon-socket` for per-process cwd/session
+    // isolation (the adapter appends the unique path at launch).
+    id: "acp-prime-agent",
+    displayName: "Prime Agent",
+    command: "prime-agent",
+    args: ["--mode", "acp"],
+    env: {},
+    executableName: "prime-agent",
+    uniqueDaemonSocket: true,
+  },
+  {
     id: "acp-opencode",
     displayName: "opencode",
     command: "opencode",
