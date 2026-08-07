@@ -237,6 +237,49 @@ export const auditLog = sqliteTable(
   (table) => [index("audit_log_user_id_idx").on(table.userId)],
 );
 
+/**
+ * Provisioning lifecycle for a hosted BB workspace container. One row per user
+ * (enforced by the unique `user_id` index); `serverId` links to the primary
+ * `server` row whose subdomain becomes the container's Connect address.
+ *
+ * The status field drives a minimal state machine:
+ *   pending → provisioning → starting → connecting → ready
+ *   (any state) → failed
+ *
+ * `containerName` is the Incus instance name, set when provisioning starts.
+ * `error` carries the last failure message; cleared on retry.
+ */
+export const cloudWorkspaceStatuses = [
+  "pending",
+  "provisioning",
+  "starting",
+  "connecting",
+  "ready",
+  "failed",
+] as const;
+export type CloudWorkspaceStatus = (typeof cloudWorkspaceStatuses)[number];
+
+export const cloudWorkspace = sqliteTable(
+  "cloud_workspace",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    serverId: text("server_id").references(() => server.id, {
+      onDelete: "cascade",
+    }),
+    containerName: text("container_name"),
+    status: text("status", { enum: cloudWorkspaceStatuses })
+      .notNull()
+      .default("pending"),
+    error: text("error"),
+    createdAt: timestampMs("created_at").notNull(),
+    updatedAt: timestampMs("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("cloud_workspace_user_id_idx").on(table.userId)],
+);
+
 export const connectCodePurposes = [
   "server-pair",
   "manual-pair",
@@ -254,5 +297,6 @@ export const schema = {
   server,
   machine,
   connectCode,
+  cloudWorkspace,
   auditLog,
 };
