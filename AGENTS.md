@@ -72,3 +72,9 @@ Five canonical labels used as-is: `needs-triage`, `needs-info`, `ready-for-agent
 ### Domain docs
 
 Single-context: `CONTEXT.md` at repo root + `docs/adr/`. See `docs/agents/domain.md`.
+
+<!-- crew:start -->
+## Crew orchestration
+
+Substantial project work is delegated through the `crew` skill so the root chat remains available. Crew model routing and supervision rules live in `docs/agents/crew.md`.
+<!-- crew:end -->

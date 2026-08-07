@@ -73,3 +73,12 @@ output.txt
 # Temp roots from the CLI packaged-plugin build test (mkdtemp under apps/cli)
 apps/cli/.packaged-plugin-build-*
 banks
+
+# Prime agent artifacts
+.prime/
+
+# Setup scripts with embedded secrets (per-deployment, not for repo)
+scripts/setup-bb-zopu-live.sh
+
+# Agent tooling docs (not project code)
+docs/agents/crew.md
