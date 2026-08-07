@@ -2,7 +2,7 @@ import { env as workerEnv } from "cloudflare:workers";
 
 export interface Env {
   DB: D1Database;
-  TUNNEL_DO: DurableObjectNamespace;
+  TUNNEL_DO?: DurableObjectNamespace;
   BASE_DOMAIN: string;
   APP_URL: string;
   GITHUB_CLIENT_ID: string;
@@ -16,6 +16,16 @@ export interface Env {
   LANDING_POSTHOG_KEY?: string;
   RESEND_API_KEY?: string;
   RESEND_AUDIENCE_ID?: string;
+  /**
+   * Incus provisioning API. The Worker reaches Incus through the authenticated
+   * Caddy reverse proxy at INCUS_API_URL (bearer INCUS_API_SECRET). All other
+   * Incus settings have safe defaults and only need overriding for testing.
+   */
+  INCUS_API_URL: string;
+  INCUS_API_SECRET: string;
+  INCUS_PROJECT?: string;
+  INCUS_TEMPLATE?: string;
+  INCUS_STORAGE_POOL?: string;
 }
 
 export function getEnv(): Env {

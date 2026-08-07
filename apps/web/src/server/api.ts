@@ -37,6 +37,7 @@ export function depsFromEnv(env: Env): Deps {
     baseDomain: env.BASE_DOMAIN,
     appUrl: env.APP_URL,
     closeTunnel: async (routingKey) => {
+      if (!env.TUNNEL_DO) throw new Error("TUNNEL_DO not configured");
       const stub = env.TUNNEL_DO.get(env.TUNNEL_DO.idFromName(routingKey));
       const response = await stub.fetch("https://tunnel/__control/close");
       if (!response.ok) {

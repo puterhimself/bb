@@ -12,6 +12,15 @@ import {
   getAccountState,
   type AccountState,
 } from "./api.js";
+import {
+  createCloudWorkspace,
+  getCloudWorkspaceStatus,
+  retryCloudWorkspace,
+  startProvisioning,
+  reconcileWorkspace,
+  provisioningDepsFromEnv,
+  type CloudWorkspaceSummary,
+} from "./provisioning.js";
 import { getEnv } from "./env.js";
 import { getSessionUserId } from "./current-user.server.js";
 
@@ -21,15 +30,23 @@ import { getSessionUserId } from "./current-user.server.js";
 
 export type DashboardState =
   | { authed: false }
-  | ({ authed: true } & AccountState);
+  | ({ authed: true } & AccountState & {
+      cloudWorkspace: CloudWorkspaceSummary | null;
+    });
 
 export const getDashboard = createServerFn({ method: "GET" }).handler(
   async (): Promise<DashboardState> => {
     const userId = await getSessionUserId();
     if (!userId) return { authed: false };
+    const deps = provisioningDepsFromEnv(getEnv());
+    const [accountState, cloudWorkspace] = await Promise.all([
+      getAccountState(deps, userId),
+      reconcileWorkspace(deps, userId),
+    ]);
     return {
       authed: true,
-      ...(await getAccountState(depsFromEnv(getEnv()), userId)),
+      ...accountState,
+      cloudWorkspace,
     };
   },
 );
@@ -109,4 +126,46 @@ export const revokeMachineFn = createServerFn({ method: "POST" })
     if (!userId) return { error: "unauthenticated" as const };
     if (!machineId) return { error: "not-found" as const };
     return revokeMachine(depsFromEnv(getEnv()), userId, machineId);
+  });
+
+// ── Cloud workspace provisioning ────────────────────────────────────
+
+export const createCloudWorkspaceFn = createServerFn({ method: "POST" })
+  .validator((input: undefined) => input)
+  .handler(async () => {
+    const userId = await getSessionUserId();
+    if (!userId) return { error: "unauthenticated" as const };
+    const deps = provisioningDepsFromEnv(getEnv());
+    const result = await createCloudWorkspace(deps, userId);
+    if ("error" in result) return result;
+    if (result.workspace.status === "pending") {
+      const updated = await startProvisioning(deps, userId, result.workspace);
+      return { ok: true as const, workspace: updated };
+    }
+    return result;
+  });
+
+export const getCloudWorkspaceStatusFn = createServerFn({ method: "GET" })
+  .validator((input: undefined) => input)
+  .handler(async () => {
+    const userId = await getSessionUserId();
+    if (!userId) return { error: "unauthenticated" as const };
+    const deps = provisioningDepsFromEnv(getEnv());
+    const workspace = await reconcileWorkspace(deps, userId);
+    return { workspace };
+  });
+
+export const retryCloudWorkspaceFn = createServerFn({ method: "POST" })
+  .validator((input: undefined) => input)
+  .handler(async () => {
+    const userId = await getSessionUserId();
+    if (!userId) return { error: "unauthenticated" as const };
+    const deps = provisioningDepsFromEnv(getEnv());
+    const result = await retryCloudWorkspace(deps, userId);
+    if ("error" in result) return result;
+    if (result.workspace.status === "pending") {
+      const updated = await startProvisioning(deps, userId, result.workspace);
+      return { ok: true as const, workspace: updated };
+    }
+    return result;
   });
