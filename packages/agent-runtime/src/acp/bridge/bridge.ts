@@ -82,7 +82,6 @@ import {
   type AcpAgentRequestResponder,
 } from "./agent-connection.js";
 import {
-  ACP_NATIVE_REASONING_EFFORTS,
   buildAgentModelCatalog,
   buildAcpNativeReasoningSupport,
   buildModelCatalogFromConfigOptions,
@@ -1842,33 +1841,6 @@ async function handleRequest(
             request.params.primaryModels,
           ),
         );
-        return;
-      }
-      // CLI model list failed or produced nothing. Fall back to the static
-      // primaryModels (e.g. agents whose `model list` output format the
-      // line parser can't handle, like Prime Agent's table layout).
-      if (
-        request.params.primaryModels !== undefined &&
-        request.params.primaryModels.length > 0
-      ) {
-        sendResult(request.id, {
-          models: applyConfiguredReasoningToModels(
-            request.params.primaryModels.map((id, index) => ({
-              id,
-              model: id,
-              displayName: id,
-              description: "",
-              supportedReasoningEfforts: ACP_NATIVE_REASONING_EFFORTS,
-              defaultReasoningEffort: "medium",
-              isDefault: index === 0,
-            })),
-            {
-              reasoningCli: request.params.reasoningCli,
-              nativeReasoning: request.params.nativeReasoning,
-            },
-          ),
-          selectedOnlyModels: [],
-        });
         return;
       }
       const sessionDiscoveredModels =

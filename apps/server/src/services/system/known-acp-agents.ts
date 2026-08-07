@@ -19,45 +19,17 @@ export const KNOWN_ACP_AGENTS: readonly KnownAcpAgent[] = [
     // Its CLI always routes sessions through a daemon socket, so each BB
     // thread spawns its own `--daemon-socket` for per-process cwd/session
     // isolation (the adapter appends the unique path at launch).
+    // We intentionally do *not* pin `--model` or `--provider` here; prime-agent
+    // reads its defaults from `~/.prime/agent/settings.json` and the user's
+    // environment. Adding explicit flags broke model resolution (cheaptricks
+    // IDs were matched against unrelated providers).
     id: "acp-prime-agent",
     displayName: "Prime Agent",
     command: "prime-agent",
-    args: ["--mode", "acp", "--provider", "cheaptricks"],
+    args: ["--mode", "acp"],
     env: {},
     executableName: "prime-agent",
     uniqueDaemonSocket: true,
-    modelCli: {
-      listArgs: ["model", "list"],
-      selectFlag: "--model",
-      primaryModels: [
-        "deepseek-v4-flash",
-        "deepseek-v4-pro",
-        "glm-5.2",
-        "gpt-5.4",
-        "gpt-5.4-mini",
-        "gpt-5.5",
-        "gpt-5.6-sol",
-        "grok-4.5",
-        "kimi-k3",
-        "minimax-m3",
-        "mimo-v2.5",
-        "qwen3.8-max",
-      ],
-    },
-    reasoningCli: {
-      flag: "--thinking",
-      supportedLevels: ["low", "medium", "high"],
-      levelValues: {
-        none: "off",
-        low: "low",
-        medium: "medium",
-        high: "high",
-        xhigh: "xhigh",
-        ultracode: "xhigh",
-        max: "max",
-      },
-      defaultLevel: "medium",
-    },
   },
   {
     id: "acp-opencode",
