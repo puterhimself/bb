@@ -13,6 +13,7 @@ import { OpenAiIcon } from "@/components/icons/OpenAiIcon";
 import { OpencodeIcon } from "@/components/icons/OpencodeIcon";
 import { OmpIcon } from "@/components/icons/OmpIcon";
 import { PiIcon } from "@/components/icons/PiIcon";
+import { PrimeAgentIcon } from "@/components/icons/PrimeAgentIcon";
 import { Icon } from "@bb/shared-ui/icon";
 
 const ACP_ID_PREFIX = "acp-";
@@ -36,6 +37,7 @@ const KNOWN_ACP_BRAND_ICONS: Record<
   "hermes-agent": HermesAgentIcon,
   opencode: OpencodeIcon,
   omp: OmpIcon,
+  "prime-agent": PrimeAgentIcon,
 };
 
 const configuredProviderLogoIcons = new Map<
@@ -150,6 +152,9 @@ export function getProviderIconColorClass(providerId: string): string {
   }
   if (providerId === "acp-omp") {
     return "text-[#9333EA]";
+  }
+  if (providerId === "acp-prime-agent") {
+    return "text-foreground";
   }
   return "text-foreground";
 }
