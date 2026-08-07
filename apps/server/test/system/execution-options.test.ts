@@ -492,14 +492,13 @@ describe("resolveSystemExecutionOptions", () => {
         acpLaunchSpec: {
           displayName: "Prime Agent",
           command: "prime-agent",
-          args: ["--mode", "acp"],
+          args: ["--mode", "acp", "--provider", "cheaptricks"],
           env: {},
           uniqueDaemonSocket: true,
           modelCli: {
             listArgs: ["model", "list"],
             selectFlag: "--model",
             primaryModels: [
-              "auto",
               "deepseek-v4-flash",
               "deepseek-v4-pro",
               "glm-5.2",

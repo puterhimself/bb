@@ -22,7 +22,7 @@ export const KNOWN_ACP_AGENTS: readonly KnownAcpAgent[] = [
     id: "acp-prime-agent",
     displayName: "Prime Agent",
     command: "prime-agent",
-    args: ["--mode", "acp"],
+    args: ["--mode", "acp", "--provider", "cheaptricks"],
     env: {},
     executableName: "prime-agent",
     uniqueDaemonSocket: true,
@@ -30,7 +30,6 @@ export const KNOWN_ACP_AGENTS: readonly KnownAcpAgent[] = [
       listArgs: ["model", "list"],
       selectFlag: "--model",
       primaryModels: [
-        "auto",
         "deepseek-v4-flash",
         "deepseek-v4-pro",
         "glm-5.2",
