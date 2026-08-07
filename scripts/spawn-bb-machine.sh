@@ -17,10 +17,9 @@
 # Usage:
 #   ./scripts/spawn-bb-machine.sh [options]
 #
-# Required:
-#   --bb-server-url   BB server URL (reachable from container)
-#   --join-code       bb machine join code
-#   --host-id         bb host ID paired with the join code
+# Required (self-contained model):
+#   --connect-code          Connect pairing code for auto-pairing
+#   --connect-server-url    Connect server URL (https://<subdomain>.<base>)
 #
 # Options:
 #   --template        Stopped template container to copy from [bb-template]
@@ -36,9 +35,8 @@
 set -euo pipefail
 
 # ─── Defaults ────────────────────────────────────────────────────────────────
-BB_SERVER_URL=""
-JOIN_CODE=""
-HOST_ID=""
+BB_CONNECT_CODE=""
+BB_CONNECT_SERVER_URL=""
 TEMPLATE="bb-template"
 STORAGE_POOL="btrfs-fast"
 INCUS_PROJECT="default"
@@ -51,9 +49,8 @@ JSON_OUTPUT=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --bb-server-url)  BB_SERVER_URL="${2:?}"; shift 2 ;;
-    --join-code)      JOIN_CODE="${2:?}"; shift 2 ;;
-    --host-id)        HOST_ID="${2:?}"; shift 2 ;;
+    --connect-code)         BB_CONNECT_CODE="${2:?}"; shift 2 ;;
+    --connect-server-url)   BB_CONNECT_SERVER_URL="${2:?}"; shift 2 ;;
     --template)       TEMPLATE="${2:?}"; shift 2 ;;
     --storage-pool)   STORAGE_POOL="${2:?}"; shift 2 ;;
     --incus-project)  INCUS_PROJECT="${2:?}"; shift 2 ;;
@@ -68,9 +65,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-[ -n "$BB_SERVER_URL" ] || { echo "ERROR: --bb-server-url is required" >&2; exit 2; }
-[ -n "$JOIN_CODE" ]     || { echo "ERROR: --join-code is required" >&2; exit 2; }
-[ -n "$HOST_ID" ]       || { echo "ERROR: --host-id is required" >&2; exit 2; }
+[ -n "$BB_CONNECT_CODE" ]       || { echo "ERROR: --connect-code is required" >&2; exit 2; }
+[ -n "$BB_CONNECT_SERVER_URL" ] || { echo "ERROR: --connect-server-url is required" >&2; exit 2; }
 
 if [ -z "$CONTAINER_NAME" ]; then
   CONTAINER_NAME="bb-$(date +%s)-$RANDOM"
@@ -99,12 +95,11 @@ incus copy "$TEMPLATE" "$CONTAINER_NAME" \
 T_COPY=$(now_ms)
 
 # ─── Step 2: Inject first-boot config ────────────────────────────────────────
-log "Injecting per-user config..."
+log "Injecting per-workspace config..."
 CONFIG_DIR=$(mktemp -d)
 cat > "${CONFIG_DIR}/first-boot.env" <<EOF
-BB_SERVER_URL=${BB_SERVER_URL}
-BB_JOIN_CODE=${JOIN_CODE}
-BB_HOST_ID=${HOST_ID}
+BB_CONNECT_CODE=${BB_CONNECT_CODE}
+BB_CONNECT_SERVER_URL=${BB_CONNECT_SERVER_URL}
 EOF
 
 incus file push "${CONFIG_DIR}/first-boot.env" \
@@ -135,14 +130,15 @@ for i in $(seq 1 60); do
 done
 T_NETWORK=$(now_ms)
 
-# ─── Step 6: Wait for BB daemon health ───────────────────────────────────────
-# The daemon wrapper enrolls via join on first boot then runs the daemon.
-# Its local API health endpoint (port 38887) is the real readiness signal.
-# Uses curl instead of node for lower per-check overhead.
+# ─── Step 6: Wait for BB server health ──────────────────────────────────────
+# The self-contained container runs bb-app start (server + daemon).
+# Server health endpoint (port 38886) is the readiness signal.
+SERVER_PORT="${DAEMON_PORT:-38887}"
+# Prefer server health (38886) but fall back to daemon health (38887)
 HEALTH_OK=0
 for i in $(seq 1 120); do
   if incus exec "$CONTAINER_NAME" --project "$INCUS_PROJECT" -- bash -c \
-    "curl -sf http://localhost:${DAEMON_PORT}/health >/dev/null 2>&1"; then
+    "curl -sf http://localhost:38886 >/dev/null 2>&1"; then
     HEALTH_OK=1
     break
   fi

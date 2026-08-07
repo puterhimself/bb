@@ -150,85 +150,64 @@ log "bb-app installed: ${BB_VER}"
 incus_exec mkdir -p /workspace
 incus_exec chmod 1777 /workspace
 
-# ─── Step 8: Install the daemon wrapper and systemd service ──────────────────
+# ─── Step 8: Install the workspace startup script and systemd service ──────
 #
-# The optimized wrapper (bb-start-daemon.sh) reads /etc/bb/first-boot.env
-# (injected per-user at spawn time). On first boot it enrolls via join
-# (no auth.json), on restarts it runs the daemon directly.
+# The self-contained wrapper (bb-workspace-start.sh) runs bb-app start
+# (full stack: server + web UI + auto-enrolled daemon), waits for server
+# health, then auto-pairs Connect using the injected first-boot.env.
 #
-# Optimizations baked in:
-#   - Skips the bb-app launcher, invokes daemon-bundle.mjs directly (~1.3s faster)
-#   - Uses NODE_COMPILE_CACHE for V8 bytecode caching
-#   - The systemd unit depends on network.target (not network-online.target)
-#     so the daemon starts as soon as the interface exists, not after DHCP
+# first-boot.env (injected per-workspace at spawn time) contains:
+#   BB_CONNECT_CODE=<connect-pair-code>
+#   BB_CONNECT_SERVER_URL=https://<subdomain>.<base_domain>
 
-log "Installing optimized daemon wrapper and systemd service..."
+log "Installing workspace startup script and systemd service..."
 
 incus_exec bash -c 'mkdir -p /etc/bb'
 
-incus_exec bash -c 'cat > /usr/local/sbin/bb-start-daemon.sh <<'\''SCRIPT'\''
+incus_exec bash -c 'cat > /usr/local/sbin/bb-workspace-start.sh <<'\''SCRIPT'\''
 #!/usr/bin/env bash
-# BB daemon wrapper: joins on first boot (no auth.json), runs daemon on restarts.
-# Optimized: skips bb-app launcher, invokes daemon-bundle.mjs directly.
+# bb-workspace-start.sh — self-contained workspace: bb-app start + auto-connect
 set -euo pipefail
+
 CONFIG=/etc/bb/first-boot.env
-if [ ! -f "$CONFIG" ]; then
-  echo "bb-start-daemon: no first-boot.env, exiting"
-  exit 1
-fi
-source "$CONFIG"
-SLUG=$(echo "$BB_SERVER_URL" | sed "s|https\?://||; s|[^a-zA-Z0-9.-]||g" | tr "." "-")
-export BB_DATA_DIR="/root/.bb-machines/${SLUG}"
-mkdir -p "$BB_DATA_DIR"
-if [ -f "${BB_DATA_DIR}/auth.json" ]; then
-  echo "bb-start-daemon: auth.json exists, starting daemon"
-else
-  echo "bb-start-daemon: first boot, enrolling via join"
-fi
 
-# Resolve paths (avoid bb-app launcher which spawns a second Node process)
-NODE_BIN="/usr/bin/node"
-DAEMON_DIR="/usr/lib/node_modules/bb-app/host-daemon/dist"
-DAEMON_ENTRY="${DAEMON_DIR}/daemon-bundle.mjs"
-BB_VER=$(sed -n '\''s/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'\'' /usr/lib/node_modules/bb-app/package.json | head -1)
+# Start bb-app (server + daemon, auto-enrolls locally)
+bb-app start &
+BB_PID=$!
 
-# Set all environment variables that the bb-app launcher would set
-export BB_APP_VERSION="${BB_VER:-0.0.0}"
-export BB_BRIDGE_DIR="$DAEMON_DIR"
-export BB_CLI_DIR="$DAEMON_DIR"
-export BB_HOST_DAEMON_PORT="${BB_HOST_DAEMON_PORT:-38887}"
-export BB_SERVER_URL="$BB_SERVER_URL"
-export BB_HOST_DAEMON_AUTO_UPDATE="1"
-export NODE_ENV="production"
+# Wait for server health (port 38886)
+for i in $(seq 1 120); do
+  if curl -sf http://localhost:38886 >/dev/null 2>&1; then
+    echo "bb server is healthy"
+    break
+  fi
+  sleep 0.5
+done
 
-# Enable V8 compile cache (populated on first run, speeds up subsequent runs)
-export NODE_COMPILE_CACHE="/var/cache/bb-node-compile"
-mkdir -p "$NODE_COMPILE_CACHE"
-
-if [ ! -f "${BB_DATA_DIR}/auth.json" ]; then
-  export BB_HOST_ENROLL_KEY="$BB_JOIN_CODE"
-  export BB_HOST_ID="$BB_HOST_ID"
+# Auto-pair Connect if configured
+if [ -f "$CONFIG" ]; then
+  source "$CONFIG"
+  if [ -n "${BB_CONNECT_CODE:-}" ] && [ -n "${BB_CONNECT_SERVER_URL:-}" ]; then
+    echo "Auto-pairing connect: ${BB_CONNECT_SERVER_URL}"
+    bb connect --code "$BB_CONNECT_CODE" --server "$BB_CONNECT_SERVER_URL" 2>&1 || \
+      echo "WARNING: connect auto-pair failed (will need manual pairing)"
+  fi
 fi
 
-# Write config.json for consistency with bb CLI tools
-if [ ! -f "${BB_DATA_DIR}/config.json" ]; then
-  printf '\''{"serverUrl":"%s"}\n'\'' "$BB_SERVER_URL" > "${BB_DATA_DIR}/config.json"
-fi
-
-# Direct daemon invocation — skip bb-app launcher
-exec "$NODE_BIN" "$DAEMON_ENTRY"
+# Wait for bb-app process
+wait $BB_PID
 SCRIPT
-chmod +x /usr/local/sbin/bb-start-daemon.sh'
+chmod +x /usr/local/sbin/bb-workspace-start.sh'
 
-incus_exec bash -c 'cat > /etc/systemd/system/bb-host-daemon.service <<'\''UNIT'\''
+incus_exec bash -c 'cat > /etc/systemd/system/bb-workspace.service <<'\''UNIT'\''
 [Unit]
-Description=bb host daemon
+Description=bb workspace (server + daemon + connect)
 After=network.target
 Wants=network.target
 ConditionPathExists=/etc/bb/first-boot.env
 
 [Service]
-ExecStart=/usr/local/sbin/bb-start-daemon.sh
+ExecStart=/usr/local/sbin/bb-workspace-start.sh
 Restart=always
 RestartSec=2
 WorkingDirectory=/workspace
@@ -237,7 +216,7 @@ WorkingDirectory=/workspace
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-systemctl enable bb-host-daemon.service'
+systemctl enable bb-workspace.service'
 
 # ─── Step 9: Cleanup (if enabled) ────────────────────────────────────────────
 if [ "$CLEAN" -eq 1 ]; then
