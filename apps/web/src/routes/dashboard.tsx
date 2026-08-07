@@ -21,8 +21,11 @@ import {
   removeServerFn,
   revokeMachineFn,
   getDashboard,
+  createCloudWorkspaceFn,
+  retryCloudWorkspaceFn,
 } from "@/server/fns";
 import type { IssuedCode, MachineSummary, ServerSummary } from "@/server/api";
+import type { CloudWorkspaceSummary } from "@/server/provisioning";
 import bbIcon from "../assets/bb-icon.png";
 import { DASHBOARD_PATH, connectReturnTo } from "@/lib/connect-return-to";
 
@@ -998,17 +1001,101 @@ function AccountFooter({ state }: { state: ServerState }) {
 
 /* ── account dashboard — one list for 1..N bbs ────────────────────── */
 
+/* ── hosted workspace provisioning ────────────────────────────────── */
+
+const STATUS_COPY: Record<string, string> = {
+  pending: "Preparing…",
+  provisioning: "Cloning workspace image…",
+  starting: "Starting container…",
+  connecting: "Connecting tunnel…",
+  ready: "Ready",
+  failed: "Failed",
+};
+
+function CloudWorkspaceCard({
+  workspace,
+  baseDomain,
+  onRetry,
+}: {
+  workspace: CloudWorkspaceSummary | null;
+  baseDomain: string;
+  onRetry: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  // No workspace yet — offer creation. The createCloudWorkspaceFn is
+  // called from the parent so it can invalidate the route.
+  if (!workspace) return null;
+
+  if (workspace.status === "failed") {
+    return (
+      <WebCard>
+        <div className="flex items-center gap-2.5">
+          <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-destructive" />
+          <h3 className="text-[15px] font-semibold tracking-tight">
+            Workspace failed
+          </h3>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {workspace.error ?? "Something went wrong during provisioning."}
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-3"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            await onRetry();
+            setBusy(false);
+          }}
+        >
+          {busy ? "Retrying…" : "Retry"}
+        </Button>
+      </WebCard>
+    );
+  }
+
+  if (workspace.status === "ready") {
+    // The server URL is the first connected server's URL (the primary).
+    // The workspace is linked to the primary server row.
+    return null; // The server list below shows the "Open" link.
+  }
+
+  // Active provisioning — show progress.
+  return (
+    <WebCard>
+      <div className="flex items-center gap-2.5">
+        <Spinner />
+        <div>
+          <h3 className="text-[15px] font-semibold tracking-tight">
+            Setting up your workspace
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {STATUS_COPY[workspace.status] ?? workspace.status}
+          </p>
+        </div>
+      </div>
+    </WebCard>
+  );
+}
+
+/* ── account dashboard — one list for 1..N bbs ────────────────────── */
+
 function AccountDashboard({ state }: { state: ServerState }) {
   const router = useRouter();
   const [connectOpen, setConnectOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const single = state.servers.length === 1;
-  // Poll whenever any bb is still unpaired (first run, or a just-claimed row
-  // waiting for its machine) so the row flips to Online without a manual reload.
+  // Poll whenever any bb is still unpaired OR a workspace is provisioning.
   const waiting =
     state.servers.some((s: ServerSummary) => !s.connected) ||
-    (connectOpen && pendingId != null);
+    (connectOpen && pendingId != null) ||
+    (state.cloudWorkspace != null &&
+      state.cloudWorkspace.status !== "ready" &&
+      state.cloudWorkspace.status !== "failed");
 
   useEffect(() => {
     if (!waiting) return;
@@ -1052,6 +1139,46 @@ function AccountDashboard({ state }: { state: ServerState }) {
 
   return (
     <Shell top width="md" footer={<AccountFooter state={state} />}>
+      {/* Hosted workspace provisioning card. */}
+      {state.cloudWorkspace == null && (
+        <WebCard className="mb-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-[15px] font-semibold tracking-tight">
+                Create a workspace
+              </h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Spin up a hosted bb in seconds. No install needed.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              disabled={creating}
+              onClick={async () => {
+                setCreating(true);
+                await createCloudWorkspaceFn({ data: undefined });
+                await router.invalidate();
+                setCreating(false);
+              }}
+            >
+              {creating ? "Creating…" : "Create workspace"}
+            </Button>
+          </div>
+        </WebCard>
+      )}
+      {(state.cloudWorkspace != null ||
+        state.cloudWorkspace?.status === "failed") && (
+        <div className="mb-3">
+          <CloudWorkspaceCard
+            workspace={state.cloudWorkspace}
+            baseDomain={state.baseDomain}
+            onRetry={async () => {
+              await retryCloudWorkspaceFn({ data: undefined });
+              await router.invalidate();
+            }}
+          />
+        </div>
+      )}
       {/* Tight padding so each row is a full-bleed, rounded hover target. */}
       <div className="rounded-xl border border-border bg-card p-2 shadow-sm">
         <div className="flex items-center px-1.5 pb-1.5 pl-3 pt-1.5">
