@@ -1,0 +1,52 @@
+// Dev deployment for zopu.live
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bb-web-dev",
+  "compatibility_date": "2026-06-11",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "@tanstack/react-start/server-entry",
+  "workers_dev": false,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "BASE_DOMAIN": "zopu.live",
+    "APP_URL": "https://bb.zopu.live",
+    "INCUS_API_URL": "https://incus.zopu.puter.wtf",
+    "INCUS_PROJECT": "default",
+    "INCUS_TEMPLATE": "bb-template",
+    "INCUS_STORAGE_POOL": "btrfs-fast"
+  },
+  "secrets": {
+    "required": [
+      "GITHUB_CLIENT_ID",
+      "GITHUB_CLIENT_SECRET",
+      "BETTER_AUTH_SECRET",
+      "INCUS_API_SECRET"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bb-connect-dev",
+      "database_id": "056c571a-dca9-4971-a878-ba1f0ca12651"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TUNNEL_DO",
+        "class_name": "TunnelDO",
+        "script_name": "bb-web-dev"
+      }
+    ]
+  },
+  "routes": [
+    {
+      "pattern": "bb.zopu.live",
+      "custom_domain": true
+    }
+  ]
+}

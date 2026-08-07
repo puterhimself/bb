@@ -13,18 +13,23 @@
 //   GITHUB_CLIENT_SECRET / BETTER_AUTH_SECRET / LANDING_POSTHOG_KEY / RESEND_API_KEY
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "bb-web-staging",
+  "name": "bb-web-dev",
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
   "workers_dev": false,
   "observability": { "enabled": true },
   "vars": {
-    "BASE_DOMAIN": "vibecodethis.site",
-    "APP_URL": "https://vibecodethis.site",
+    "BASE_DOMAIN": "bb.zopu.live",
+    "APP_URL": "https://bb.zopu.live",
     // Resend audience that /api/subscribe adds emails to ("bb users").
     // Not a secret — only the API key is.
-    "RESEND_AUDIENCE_ID": "299db4ee-f3db-476d-9847-0bf4344d9c44"
+    "RESEND_AUDIENCE_ID": "299db4ee-f3db-476d-9847-0bf4344d9c44",
+    // Incus provisioning API (Caddy reverse proxy on contabo-vds).
+    "INCUS_API_URL": "https://incus.zopu.puter.wtf",
+    "INCUS_PROJECT": "default",
+    "INCUS_TEMPLATE": "bb-template",
+    "INCUS_STORAGE_POOL": "btrfs-fast"
   },
   "secrets": {
     "required": [
@@ -32,14 +37,15 @@
       "GITHUB_CLIENT_SECRET",
       "BETTER_AUTH_SECRET",
       "LANDING_POSTHOG_KEY",
-      "RESEND_API_KEY"
+      "RESEND_API_KEY",
+      "INCUS_API_SECRET"
     ]
   },
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "bb-connect-staging",
-      "database_id": "1aaa5562-457d-43a7-b11f-18b4f19bd62c"
+      "database_name": "bb-connect-dev",
+      "database_id": "056c571a-dca9-4971-a878-ba1f0ca12651"
     }
   ],
   "durable_objects": {
@@ -47,11 +53,11 @@
       {
         "name": "TUNNEL_DO",
         "class_name": "TunnelDO",
-        "script_name": "bb-connect-staging"
+        "script_name": "bb-connect-dev"
       }
     ]
   },
-  "routes": [{ "pattern": "vibecodethis.site", "custom_domain": true }],
+  "routes": [{ "pattern": "bb.zopu.live", "custom_domain": true }],
   "env": {
     // Production (getbb.app). Cutover note: the getbb.app + www custom domains
     // move here from the old bb-landing worker; until then workers_dev gives a
@@ -70,13 +76,18 @@
           "GITHUB_CLIENT_SECRET",
           "BETTER_AUTH_SECRET",
           "LANDING_POSTHOG_KEY",
-          "RESEND_API_KEY"
+          "RESEND_API_KEY",
+          "INCUS_API_SECRET"
         ]
       },
       "vars": {
         "BASE_DOMAIN": "getbb.app",
         "APP_URL": "https://getbb.app",
-        "RESEND_AUDIENCE_ID": "299db4ee-f3db-476d-9847-0bf4344d9c44"
+        "RESEND_AUDIENCE_ID": "299db4ee-f3db-476d-9847-0bf4344d9c44",
+        "INCUS_API_URL": "https://incus.zopu.puter.wtf",
+        "INCUS_PROJECT": "default",
+        "INCUS_TEMPLATE": "bb-template",
+        "INCUS_STORAGE_POOL": "btrfs-fast"
       },
       "d1_databases": [
         {

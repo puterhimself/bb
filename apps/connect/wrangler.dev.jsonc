@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bb-connect-dev",
+  "main": "./src/worker.ts",
+  "compatibility_date": "2026-06-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["TunnelDO"] }],
+  "durable_objects": {
+    "bindings": [{ "name": "TUNNEL_DO", "class_name": "TunnelDO" }]
+  },
+  "vars": { "BASE_DOMAIN": "bb.zopu.live" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bb-connect-dev",
+      "database_id": "056c571a-dca9-4971-a878-ba1f0ca12651",
+      "migrations_dir": "../../packages/connect-db/migrations"
+    }
+  ],
+  "routes": [{ "pattern": "*.bb.zopu.live/*", "zone_name": "zopu.live" }]
+}
