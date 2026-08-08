@@ -492,9 +492,34 @@ describe("resolveSystemExecutionOptions", () => {
         acpLaunchSpec: {
           displayName: "Prime Agent",
           command: "prime-agent",
-          args: ["--mode", "acp"],
+          args: ["--mode", "acp", "--provider", "cheaptricks"],
           env: {},
           uniqueDaemonSocket: true,
+          modelCli: {
+            listArgs: ["model", "list"],
+            selectFlag: "--model",
+            primaryModels: [
+              "cheaptricks/deepseek-v4-flash",
+              "cheaptricks/glm-5.2",
+              "cheaptricks/gpt-5.3-codex-spark",
+              "cheaptricks/mimo-v2.5",
+              "cheaptricks/minimax-m3",
+            ],
+          },
+          reasoningCli: {
+            flag: "--thinking",
+            supportedLevels: ["none", "low", "medium", "high", "xhigh", "max"],
+            levelValues: {
+              none: "off",
+              low: "low",
+              medium: "medium",
+              high: "high",
+              xhigh: "xhigh",
+              ultracode: "xhigh",
+              max: "max",
+            },
+            defaultLevel: "medium",
+          },
         },
       });
     });
